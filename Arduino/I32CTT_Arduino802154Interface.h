@@ -88,15 +88,15 @@ enum IEEE_802154_FRAME_VER {
 };
 
 struct __attribute__((__packed__)) IEEE_802154_FRAME_FCF {
-  uint frame_type : 3;
-  uint sec_enabled : 1;
-  uint frame_pending : 1;
-  uint ack_request : 1;
-  uint pan_id_comp : 1;
-  uint res_0 : 3;
-  uint dst_addr_mode : 2;
-  uint frame_ver : 2;
-  uint src_addr_mode : 2;
+  uint8_t frame_type : 3;
+  uint8_t sec_enabled : 1;
+  uint8_t frame_pending : 1;
+  uint8_t ack_request : 1;
+  uint8_t pan_id_comp : 1;
+  uint8_t res_0 : 3;
+  uint8_t dst_addr_mode : 2;
+  uint8_t frame_ver : 2;
+  uint8_t src_addr_mode : 2;
 };
 
 enum AT86RF233_TRAC_STATUS {
@@ -225,6 +225,10 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
     void send_to_dst();
     void send_to_addr(uint16_t addr);
     uint16_t get_MTU();
+    uint8_t cs_pin;
+    uint8_t slp_tx_pin;
+    uint8_t rst_pin;
+    uint8_t irq_pin;
   private:
     uint8_t *frame_buffer;
     uint8_t reg_read(uint8_t addr);
@@ -235,10 +239,6 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
     uint8_t wait_for_state(AT86RF233_TRX_STATUS state);
     void update_state();
     uint8_t phy_status;
-    uint8_t cs_pin;
-    uint8_t slp_tx_pin;
-    uint8_t rst_pin;
-    uint8_t irq_pin;
     uint8_t lqi;
     uint8_t rx_status_0;
     uint8_t rx_status_1;

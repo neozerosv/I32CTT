@@ -67,7 +67,7 @@ uint8_t I32CTT_Controller::MasterInterface::write_record(I32CTT_RegData reg_data
 
 uint8_t I32CTT_Controller::MasterInterface::read_record(uint16_t reg) {
   uint8_t result = 0;
-  Serial.println("Pushing record");
+  //Serial.println("Pushing record");
   // Enviar comandos al tx_buffer
 
   if(this->current_cmd!=CMD_R || this->state != MASTER_STATE_t::PREPARE) {
@@ -197,7 +197,7 @@ I32CTT_Controller::I32CTT_Controller(uint8_t total_modes) {
 uint8_t I32CTT_Controller::set_interface(I32CTT_Interface &iface) {
   this->interface = &iface;
   this->interface->init();
-  Serial.println("Controller initialized.");
+  //Serial.println("Controller initialized.");
   return 0;
 }
 
@@ -214,8 +214,8 @@ uint8_t I32CTT_Controller::add_mode_driver(I32CTT_Endpoint &drv) {
   if(this->modes_set >= this->total_modes)
     return 0;
 
-  Serial.print("Adding mode at ");
-  Serial.println(this->modes_set, DEC);
+  //Serial.print("Adding mode at ");
+  //Serial.println(this->modes_set, DEC);
   this->drivers[this->modes_set++] = &drv;
   
   drv.init();
@@ -230,7 +230,7 @@ uint8_t I32CTT_Controller::add_mode_driver(I32CTT_Endpoint &drv) {
  *        incluyendo "Idle". Esta función no toma parámetros.
  */
 void I32CTT_Controller::init() {
-  Serial.println("Machine started...");
+  //Serial.println("Machine started...");
 }
 
 /**
@@ -251,7 +251,7 @@ void I32CTT_Controller::run() {
   if(this->interface != 0) {
     this->interface->update();
     if(this->interface->data_available()) {
-      Serial.println("Data available");
+      //Serial.println("Data available");
       this->parse(this->interface->rx_buffer, this->interface->rx_size);
     }
   }
@@ -498,7 +498,7 @@ uint8_t I32CTT_Controller::get_endpoint(uint8_t *buffer, uint8_t cmd_type, uint8
  * \param buffsize Tamaño del buffer.
  */
 void I32CTT_Controller::parse(uint8_t *buffer, uint8_t buffsize) {
-  Serial.println("Trying to parse");
+  //Serial.println("Trying to parse");
   if(buffsize==0) // Should never happend. But here just in case.
     return;
   if(buffsize<sizeof(I32CTT_Header)) // This neither.
@@ -511,16 +511,16 @@ void I32CTT_Controller::parse(uint8_t *buffer, uint8_t buffsize) {
   uint8_t mode = buffer[1];
   uint8_t id_found = 0;
 
-  Serial.print("CMD: ");
-  Serial.print(cmd, HEX);
-  Serial.print("\r\n");
-  Serial.print("MODE: ");
-  Serial.print(mode, HEX);
-  Serial.print("\r\n");
+  //Serial.print("CMD: ");
+  //Serial.print(cmd, HEX);
+  //Serial.print("\r\n");
+  //Serial.print("MODE: ");
+  //Serial.print(mode, HEX);
+  //Serial.print("\r\n");
 
   if(!valid_size(cmd, buffsize)) // return if size invalid
     return;
-  Serial.println("Valid size.");
+  //Serial.println("Valid size.");
   
   // return if mode not set
   // Fixing bug reported by Joksan
@@ -528,28 +528,28 @@ void I32CTT_Controller::parse(uint8_t *buffer, uint8_t buffsize) {
     return;
 
   uint8_t records = reg_count(cmd, buffsize);
-  Serial.print("Records: ");
-  Serial.print(records, DEC);
-  Serial.print("\r\n");
+  //Serial.print("Records: ");
+  //Serial.print(records, DEC);
+  //Serial.print("\r\n");
 
   if((this->interface != NULL) && (this->drivers[mode] !=  NULL)) {
-    Serial.println("Calling driver");
+    //Serial.println("Calling driver");
     I32CTT_Endpoint *driver = this->drivers[mode];
 
     switch(cmd) {
       case CMD_R:
-        Serial.print("Buffer size: ");
-        Serial.println(buffsize, DEC);
-        Serial.print("Records: ");
-        Serial.println(records, DEC);
+        //Serial.print("Buffer size: ");
+        //Serial.println(buffsize, DEC);
+        //Serial.print("Records: ");
+        //Serial.println(records, DEC);
         this->interface->tx_size = sizeof(I32CTT_Header)+records*sizeof(I32CTT_RegData);
         this->interface->tx_buffer[0] = CMD_AR;
         this->interface->tx_buffer[1] = mode;
 
         for(int i=0;i<records;i++) {
           uint32_t reg = get_reg(buffer, cmd, i);
-          Serial.print("Register: ");
-          Serial.println(reg, DEC);
+          //Serial.print("Register: ");
+          //Serial.println(reg, DEC);
           put_reg(this->interface->tx_buffer, reg, CMD_AR, i);
           put_data(this->interface->tx_buffer, driver->read(reg) , CMD_AR, i);
         }
@@ -562,10 +562,10 @@ void I32CTT_Controller::parse(uint8_t *buffer, uint8_t buffsize) {
         this->master.data_available = true;
         break;
       case CMD_W:
-        Serial.print("Buffer size: ");
-        Serial.println(buffsize, DEC);
-        Serial.print("Records: ");
-        Serial.println(records, DEC);
+        //Serial.print("Buffer size: ");
+        //Serial.println(buffsize, DEC);
+        //Serial.print("Records: ");
+        //Serial.println(records, DEC);
         this->interface->tx_size = sizeof(I32CTT_Header)+records*sizeof(I32CTT_Reg);
         this->interface->tx_buffer[0] = CMD_AW;
         this->interface->tx_buffer[1] = mode;
@@ -573,8 +573,8 @@ void I32CTT_Controller::parse(uint8_t *buffer, uint8_t buffsize) {
         for(int i=0;i<records;i++) {
           uint32_t reg = get_reg(buffer, cmd, i);
           uint32_t data = get_data(buffer, cmd, i);
-          Serial.print("Register: ");
-          Serial.println(reg, DEC);
+          //Serial.print("Register: ");
+          //Serial.println(reg, DEC);
           driver->write(reg, data);
           put_reg(this->interface->tx_buffer, reg, CMD_AW, i);
         }
