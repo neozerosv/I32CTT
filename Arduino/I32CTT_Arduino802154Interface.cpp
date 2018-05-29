@@ -40,6 +40,7 @@ I32CTT_Arduino802154Interface::I32CTT_Arduino802154Interface() {
   this->pa_enabled = false;
   this->radio_enabled = false;
   this->current_state = 0;
+  this->_spi = &SPI;
 }
 
 I32CTT_Arduino802154Interface::~I32CTT_Arduino802154Interface() {
@@ -56,6 +57,11 @@ I32CTT_Arduino802154Interface::~I32CTT_Arduino802154Interface() {
   this->radio_enabled = false;
   this->current_state = 0;
   this->channel = C2480;
+  this->_spi = &SPI;
+}
+
+void I32CTT_Arduino802154Interface::set_SPI(SPIClass &spi_instance) {
+  this->_spi = &spi_instance;
 }
 
 void I32CTT_Arduino802154Interface::set_pan_id(uint16_t pan_id) {
@@ -80,16 +86,16 @@ void I32CTT_Arduino802154Interface::enable_pa(uint8_t value) {
   this->pa_enabled = value;
   if(this->pa_enabled) {
     digitalWrite(this->pa_ena_pin, HIGH);
-    //Serial.print("Enabling external PA/LNA: ");
+    Serial.print("Enabling external PA/LNA: ");
     reg_write(TRX_CTRL_1, (trx_ctrl_1 | 0x80));
-    //Serial.print("TRX_CTRL_1: ");
-    //Serial.println(reg_read(TRX_CTRL_1), HEX);
+    Serial.print("TRX_CTRL_1: ");
+    Serial.println(reg_read(TRX_CTRL_1), HEX);
   } else {
     digitalWrite(this->pa_ena_pin, LOW);
-    //Serial.print("Disabling external PA/LNA: ");
+    Serial.print("Disabling external PA/LNA: ");
     reg_write(TRX_CTRL_1, (trx_ctrl_1 & 0x7F));
-    //Serial.print("TRX_CTRL_1: ");
-    //Serial.println(reg_read(TRX_CTRL_1), HEX);
+    Serial.print("TRX_CTRL_1: ");
+    Serial.println(reg_read(TRX_CTRL_1), HEX);
   }
 }
 
@@ -97,22 +103,22 @@ uint8_t I32CTT_Arduino802154Interface::reg_read(uint8_t addr) {
   uint8_t cmd = 0x80 | (0x3F & addr);
   uint8_t result = 0;
 
-  SPI.beginTransaction(this->spi_settings);
+  this->_spi->beginTransaction(this->spi_settings);
   digitalWrite(this->cs_pin, LOW);
-  this->phy_status = SPI.transfer(cmd);
-  result = SPI.transfer(0x00);
+  this->phy_status = this->_spi->transfer(cmd);
+  result = this->_spi->transfer(0x00);
   digitalWrite(this->cs_pin, HIGH);
   return result;
 }
 
 void I32CTT_Arduino802154Interface::reg_write(uint8_t addr, uint8_t value) {
   uint8_t cmd = 0xC0 | (0x3F & addr);
-  //Serial.println(cmd, HEX);
-  //Serial.println(value, HEX);
-  SPI.beginTransaction(this->spi_settings);
+  Serial.println(cmd, HEX);
+  Serial.println(value, HEX);
+  this->_spi->beginTransaction(this->spi_settings);
   digitalWrite(this->cs_pin, LOW);
-  this->phy_status = SPI.transfer(cmd);
-  SPI.transfer(value);
+  this->phy_status = this->_spi->transfer(cmd);
+  this->_spi->transfer(value);
   digitalWrite(this->cs_pin, HIGH);
 }
 
@@ -120,11 +126,11 @@ void I32CTT_Arduino802154Interface::fb_read(uint8_t *buffer) {
   uint8_t cmd = 0x20;
   uint8_t phr = 0x00;
 
-  SPI.beginTransaction(this->spi_settings);
+  this->_spi->beginTransaction(this->spi_settings);
   digitalWrite(this->cs_pin, LOW);
-  this->phy_status = SPI.transfer(cmd);
+  this->phy_status = this->_spi->transfer(cmd);
 
-  phr = SPI.transfer(0x00);
+  phr = this->_spi->transfer(0x00);
 
   if(phr>PSDU_SIZE)
     return; //Something went really wrong. Abort.
@@ -132,11 +138,11 @@ void I32CTT_Arduino802154Interface::fb_read(uint8_t *buffer) {
   buffer[0] = phr;
 
   for(int i=0;i<phr;i++)
-    buffer[i+1] = SPI.transfer(0x00);
+    buffer[i+1] = this->_spi->transfer(0x00);
 
-  this->lqi = SPI.transfer(0x00);
-  this->rx_status_1 = SPI.transfer(0x00);
-  this->rx_status_0 = SPI.transfer(0x00);
+  this->lqi = this->_spi->transfer(0x00);
+  this->rx_status_1 = this->_spi->transfer(0x00);
+  this->rx_status_0 = this->_spi->transfer(0x00);
   digitalWrite(this->cs_pin, HIGH);
 }
 
@@ -147,13 +153,13 @@ void I32CTT_Arduino802154Interface::fb_write(uint8_t *buffer) {
   if(phr == 0 || phr>PSDU_SIZE)
     return; // Invalid PSDU size
 
-  SPI.beginTransaction(this->spi_settings);
+  this->_spi->beginTransaction(this->spi_settings);
   digitalWrite(this->cs_pin, LOW);
-  this->phy_status = SPI.transfer(cmd);
-  SPI.transfer(phr);
+  this->phy_status = this->_spi->transfer(cmd);
+  this->_spi->transfer(phr);
   
   for(int i=0;i<phr;i++) {
-    SPI.transfer(buffer[i+1]);
+    this->_spi->transfer(buffer[i+1]);
   }
   digitalWrite(this->cs_pin, HIGH);
 }
@@ -173,83 +179,83 @@ void I32CTT_Arduino802154Interface::init() {
   
   seq_num = map(0,1024, 0, 255, analogRead(A0));
   
-  //SPI.begin();
+  //this->_spi->begin();
   this->spi_settings = SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0);
 
   pn = reg_read(PART_NUM);
-  //Serial.println(PART_NUM, HEX);
+  Serial.println(PART_NUM, HEX);
   vn = reg_read(VERSION_NUM);
-  //Serial.println(VERSION_NUM, HEX);
+  Serial.println(VERSION_NUM, HEX);
 
-  //Serial.println("Detecting radio...");
-  //Serial.print("Part num: ");
-  //Serial.println(pn, HEX);
+  Serial.println("Detecting radio...");
+  Serial.print("Part num: ");
+  Serial.println(pn, HEX);
   if(pn == 0x0B) {
-    //Serial.println("Part num OK.");
+    Serial.println("Part num OK.");
   } else {
     return; // Wrong part number
   }
-  //Serial.print("Version num: ");
-  //Serial.println(vn, HEX);
+  Serial.print("Version num: ");
+  Serial.println(vn, HEX);
   if(vn == 0x01 || vn == 0x02) {
-    //Serial.println("Version num OK.");
+    Serial.println("Version num OK.");
   } else {
     return; // Wrong version number
   }
-  //Serial.println("Setting up radio...");
+  Serial.println("Setting up radio...");
 
-  //Serial.println("Enabling dynamic buffer protection...");
+  Serial.println("Enabling dynamic buffer protection...");
   // Enable Dynamic buffer protection
   uint8_t trx_ctrl_2 = reg_read(TRX_CTRL_2);
   trx_ctrl_2 |= RX_SAFE_MODE;
   reg_write(TRX_CTRL_2, trx_ctrl_2);
   
-  //Serial.println("Setting IRQ Mask...");
+  Serial.println("Setting IRQ Mask...");
   uint8_t irq_mask = IRQ_3_TRX_END; // Reporting only TRX_END
   reg_write(IRQ_MASK, irq_mask);
 
-  //Serial.println("Enabling IRQ Pooling and monitoring thru PHY status...");
+  Serial.println("Enabling IRQ Pooling and monitoring thru PHY status...");
   // Show IRQ on PHY_STATUS
   uint8_t trx_ctrl_1 = reg_read(TRX_CTRL_1);
   trx_ctrl_1 = PHY_MONITOR_IRQ_STATUS | IRQ_POLLING_EN | (trx_ctrl_1 & SPI_CMD_MODE_MASK);
   trx_ctrl_1 |= TX_AUTO_CRC_ON;
   reg_write(TRX_CTRL_1, trx_ctrl_1);
   
-  //Serial.println("Clearing interrupts...");
+  Serial.println("Clearing interrupts...");
   reg_read(IRQ_STATUS);
 
-  //Serial.println("Setting PAN address...");
+  Serial.println("Setting PAN address...");
   reg_write(PAN_ID_1, (uint8_t)(this->pan_id>>8));
   reg_write(PAN_ID_0, (uint8_t)(this->pan_id & 0xFF));
 
-  //Serial.print("My PAN: ");
-  //Serial.print(reg_read(PAN_ID_1), HEX);
-  //Serial.print(":");
-  //Serial.println(reg_read(PAN_ID_0), HEX);
+  Serial.print("My PAN: ");
+  Serial.print(reg_read(PAN_ID_1), HEX);
+  Serial.print(":");
+  Serial.println(reg_read(PAN_ID_0), HEX);
 
-  //Serial.println("Setting short address...");
+  Serial.println("Setting short address...");
   reg_write(SHORT_ADDR_1, (uint8_t)(this->short_addr>>8));
   reg_write(SHORT_ADDR_0, (uint8_t)(this->short_addr & 0xFF));
 
-  //Serial.print("My short address: ");
-  //Serial.print(reg_read(SHORT_ADDR_1), HEX);
-  //Serial.print(":");
-  //Serial.println(reg_read(SHORT_ADDR_0), HEX);
+  Serial.print("My short address: ");
+  Serial.print(reg_read(SHORT_ADDR_1), HEX);
+  Serial.print(":");
+  Serial.println(reg_read(SHORT_ADDR_0), HEX);
 
-  //Serial.println("Setting radio channel...");
+  Serial.println("Setting radio channel...");
   uint8_t phy_cc_cca = reg_read(PHY_CC_CCA);
   phy_cc_cca  = this->channel | (phy_cc_cca & PHY_CC_CCA_CHANNEL_MSK);
   reg_write(PHY_CC_CCA, phy_cc_cca);
 
-  //Serial.print("My radio channel: ");
-  //Serial.println(reg_read(PHY_CC_CCA) & 0x1F, HEX);
+  Serial.print("My radio channel: ");
+  Serial.println(reg_read(PHY_CC_CCA) & 0x1F, HEX);
 
-  //Serial.println("Radio initialized...");
+  Serial.println("Radio initialized...");
 
   this->radio_enabled = request_state(RX_AACK_ON);
 
   if(this->radio_enabled) {
-    //Serial.println("Radio ready");
+    Serial.println("Radio ready");
   }
 }
 
@@ -262,7 +268,7 @@ uint8_t I32CTT_Arduino802154Interface::wait_for_state(AT86RF233_TRX_STATUS state
   uint64_t elapsed_time = millis();
   do {
     trx_status = reg_read(TRX_STATUS) & TRX_STATE_MSK;
-    //Serial.println(trx_status, HEX);
+    Serial.println(trx_status, HEX);
   } while (trx_status != state && ((millis()-elapsed_time)<1));
 
   return trx_status == state;
@@ -271,10 +277,10 @@ uint8_t I32CTT_Arduino802154Interface::wait_for_state(AT86RF233_TRX_STATUS state
 uint8_t I32CTT_Arduino802154Interface::request_state(AT86RF233_TRX_STATE state) {
   uint8_t result = false;
   update_state();
-  //Serial.print("Current state: ");
-  //Serial.println(this->current_state, HEX);
-  //Serial.print("Requested state: ");
-  //Serial.println(state, HEX);
+  Serial.print("Current state: ");
+  Serial.println(this->current_state, HEX);
+  Serial.print("Requested state: ");
+  Serial.println(state, HEX);
 
   switch(current_state) {
     case P_ON_S:
@@ -707,30 +713,30 @@ void I32CTT_Arduino802154Interface::update() {
 
   switch(current_state) {
     case TX_ARET_ON_S:
-      ////Serial.println("Trying to send...");
+      //Serial.println("Trying to send...");
       // A frame transmission was successfully completed
       if(this->phy_status & IRQ_3_TRX_END ||
         (millis()-this->last_try)>TX_POLL_TIMEOUT
       ) {
         if((millis()-this->last_try)>TX_POLL_TIMEOUT ) {
-          //Serial.println("Packet timed out");
+          Serial.println("Packet timed out");
         } else {
           trac_status = trx_status>>5;
           switch(trac_status) {
             case TRAC_SUCCESS:
-                //Serial.println("Packet sent");
+                Serial.println("Packet sent");
               break;
             case TRAC_SUCCESS_DATA_PENDING:
-                //Serial.println("Data pending");
+                Serial.println("Data pending");
               break;
             case TRAC_CHANNEL_ACCESS_FAILURE:
-                //Serial.println("Access Failure");
+                Serial.println("Access Failure");
               break;
             case TRAC_NO_ACK:
-                //Serial.println("No ACK");
+                Serial.println("No ACK");
               break;
             case TRAC_INVALID:
-                //Serial.println("Invalid");
+                Serial.println("Invalid");
               break;
           };
         }
@@ -858,20 +864,20 @@ void I32CTT_Arduino802154Interface::send_to_addr(uint16_t addr) {
     frame_pos += sizeof(uint16_t);
 
     this->frame_buffer[0] = frame_pos-1; // Set PHR size
-    //Serial.println("BEGIN: Buffer sizes");
-    //Serial.println(this->frame_buffer[0], DEC);
-    //Serial.println(this->tx_size, DEC);
-    //Serial.println("END: Buffer sizes");
+    Serial.println("BEGIN: Buffer sizes");
+    Serial.println(this->frame_buffer[0], DEC);
+    Serial.println(this->tx_size, DEC);
+    Serial.println("END: Buffer sizes");
 
     for(int i=1;i<(this->frame_buffer[0]+1);i++) {
       sprintf(str_fmt, "%02x", this->frame_buffer[i]);
-      //Serial.print(str_fmt);
-      //Serial.print(":");
+      Serial.print(str_fmt);
+      Serial.print(":");
     }
-    //Serial.print("\r\n");
+    Serial.print("\r\n");
 
-    //Serial.print("Sequence: ");
-    //Serial.println(seq_num, DEC);
+    Serial.print("Sequence: ");
+    Serial.println(seq_num, DEC);
     this->last_try = millis();
     this->package_queued = true;
     fb_write(this->frame_buffer);

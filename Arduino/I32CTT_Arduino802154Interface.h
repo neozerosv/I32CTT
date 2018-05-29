@@ -212,6 +212,7 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
   public:
     I32CTT_Arduino802154Interface();
     ~I32CTT_Arduino802154Interface();
+    void set_SPI(SPIClass &spi_instance);
     void set_pan_id(uint16_t pan_id);
     void set_short_addr(uint16_t short_addr);
     void set_dst_addr(uint16_t short_addr);
@@ -256,6 +257,7 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
     uint64_t last_try;
     uint8_t package_queued;
     SPISettings spi_settings;
+    SPIClass *_spi;
 };
 
 #endif
