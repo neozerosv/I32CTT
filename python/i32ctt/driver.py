@@ -48,3 +48,12 @@ class driver_i32ctt:
         time.sleep(0.001)
       else:
         return ()
+
+  def esperar_paquete(self):
+    if self.__mac.hay_paquete():
+      print("Hay paquete")
+      origen, paquete = self.__mac.recibir_paquete()
+      print("Paquete de {:02X}".format(origen))
+      print("Recibido: ")
+      for i in paquete:
+        print("{:02X}".format(i))

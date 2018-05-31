@@ -268,7 +268,8 @@ class driver_at86rf233:
     time.sleep(0.1);
 
   def __escr_reg(self, reg, dato):
-    self.__spi.xfer2([self.__cmd_spi.REG_WRITE | reg, dato])
+    r = self.__spi.xfer2([self.__cmd_spi.REG_WRITE | reg, dato])
+    print("{:02X}".format(r[1]))
 
   def __leer_reg(self, reg):
     r = self.__spi.xfer2([self.__cmd_spi.REG_READ | reg, 0])
@@ -314,6 +315,7 @@ class driver_at86rf233:
     #El lazo se repite hasta alcanzar el estado deseado
     estado_alcanzado = False
     while (not estado_alcanzado):
+      print("Changing state")
       #Lee el estado actual rel radio
       s = self.__leer_reg(self.__TRX_STATUS.addr) & self.__TRX_STATUS.TRX_STATUS.mask
 
