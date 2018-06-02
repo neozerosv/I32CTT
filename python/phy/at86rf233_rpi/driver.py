@@ -12,9 +12,10 @@ class driver_at86rf233:
 
   #Pines del radio (segun numeracion de tablero)
   __pin = clase_vacia()
-  __pin.IRQ    = 16
-  __pin.RST    = 18
-  __pin.SLP_TR = 22
+  __pin.FEM_CPS = 15
+  __pin.IRQ     = 16
+  __pin.RST     = 18
+  __pin.SLP_TR  = 22
 
   #Comandos de bus SPI para el radio
   __cmd_spi = clase_vacia()
@@ -81,6 +82,12 @@ class driver_at86rf233:
   __PHY_CC_CCA.CCA_MODE.Mode_3b = 0x60
   __PHY_CC_CCA.CCA_REQUEST      = clase_vacia()
   __PHY_CC_CCA.CCA_REQUEST.mask = 0x80
+
+  #Registro TRX_CTRL_1
+  __TRX_CTRL_1                  = clase_vacia()
+  __TRX_CTRL_1.addr             = 0x04
+  __TRX_CTRL_1.PA_EXT_EN        = clase_vacia()
+  __TRX_CTRL_1.PA_EXT_EN.mask   = 0x80
 
   #Registro TRX_CTRL_2
   __TRX_CTRL_2                      = clase_vacia()
@@ -155,7 +162,8 @@ class driver_at86rf233:
     self.__gpio.setmode(self.__gpio.BOARD)
     self.__gpio.setup(self.__pin.IRQ, self.__gpio.IN)#, pull_up_down=self.__gpio.PUD_UP);
     self.__gpio.setup(self.__pin.RST, self.__gpio.OUT)
-    self.__gpio.setup(self.__pin.SLP_TR, self.__gpio.OUT);
+    self.__gpio.setup(self.__pin.SLP_TR, self.__gpio.OUT)
+    self.__gpio.setup(self.__pin.FEM_CPS, self.__gpio.OUT)
 
     #Llama a la rutina de inicializacion del radio
     self.__reset()
@@ -170,6 +178,10 @@ class driver_at86rf233:
 
     #Habilita la interrupcion del radio de paquetes completados
     self.__escr_reg(self.__IRQ_MASK.addr, self.__IRQ_MASK.IRQ_3_TRX_END.mask)
+
+    #Habilita el control automatico del PA/LNA externo
+    self.__leer_reg(self.__TRX_CTRL_1.addr)
+    self.__escr_reg(self.__TRX_CTRL_1.addr, self.__TRX_CTRL_1.PA_EXT_EN.mask)
 
     #Una vez inicializado, se coloca el radio en modo de recepcion.
     self.__cambiar_estado(self.ESTADO_RX_AACK);
@@ -260,6 +272,9 @@ class driver_at86rf233:
   def __reset(self):
     #Coloca SLP_TR en nivel bajo (inactivo)
     self.__gpio.output(self.__pin.SLP_TR, self.__gpio.LOW);
+
+    #Habilita el FEM
+    self.__gpio.output(self.__pin.FEM_CPS, self.__gpio.HIGH);
 
     #Inicializa el radio para colocarlo en un estado conocido
     self.__gpio.output(self.__pin.RST, self.__gpio.LOW)
