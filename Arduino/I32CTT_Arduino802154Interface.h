@@ -222,6 +222,7 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
     void update();
     uint8_t available();
     uint8_t data_available();
+    uint8_t get_link_health();
     void send();
     void send_to_dst();
     void send_to_addr(uint16_t addr);
@@ -255,6 +256,7 @@ class I32CTT_Arduino802154Interface: public I32CTT_Interface {
     uint8_t d_available;
     uint8_t seq_num;
     uint64_t last_try;
+    uint8_t link_health;
     uint8_t package_queued;
     SPISettings spi_settings;
     SPIClass *_spi;

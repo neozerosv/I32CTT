@@ -40,6 +40,7 @@ I32CTT_Arduino802154Interface::I32CTT_Arduino802154Interface() {
   this->pa_enabled = false;
   this->radio_enabled = false;
   this->current_state = 0;
+  this->link_health = 0;
   this->_spi = &SPI;
 }
 
@@ -56,6 +57,7 @@ I32CTT_Arduino802154Interface::~I32CTT_Arduino802154Interface() {
   this->pa_enabled = false;
   this->radio_enabled = false;
   this->current_state = 0;
+  this->link_health = 0;
   this->channel = C2480;
   this->_spi = &SPI;
 }
@@ -176,11 +178,11 @@ void I32CTT_Arduino802154Interface::init() {
   pinMode(pa_ena_pin, OUTPUT);
   digitalWrite(pa_ena_pin, LOW);
   pinMode(irq_pin, INPUT);
-  
-  seq_num = map(0,1024, 0, 255, analogRead(A0));
-  
-  //this->_spi->begin();
-  this->spi_settings = SPISettings(SPI_CLOCK_DIV16, MSBFIRST, SPI_MODE0);
+
+  seq_num = map(0,1024, 0, 255, analogRead(A8));
+
+  SPI.begin();
+  this->spi_settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 
   pn = reg_read(PART_NUM);
   Serial.println(PART_NUM, HEX);
@@ -195,6 +197,7 @@ void I32CTT_Arduino802154Interface::init() {
   } else {
     return; // Wrong part number
   }
+
   Serial.print("Version num: ");
   Serial.println(vn, HEX);
   if(vn == 0x01 || vn == 0x02) {
@@ -202,6 +205,7 @@ void I32CTT_Arduino802154Interface::init() {
   } else {
     return; // Wrong version number
   }
+
   Serial.println("Setting up radio...");
 
   Serial.println("Enabling dynamic buffer protection...");
@@ -209,7 +213,7 @@ void I32CTT_Arduino802154Interface::init() {
   uint8_t trx_ctrl_2 = reg_read(TRX_CTRL_2);
   trx_ctrl_2 |= RX_SAFE_MODE;
   reg_write(TRX_CTRL_2, trx_ctrl_2);
-  
+
   Serial.println("Setting IRQ Mask...");
   uint8_t irq_mask = IRQ_3_TRX_END; // Reporting only TRX_END
   reg_write(IRQ_MASK, irq_mask);
@@ -220,7 +224,7 @@ void I32CTT_Arduino802154Interface::init() {
   trx_ctrl_1 = PHY_MONITOR_IRQ_STATUS | IRQ_POLLING_EN | (trx_ctrl_1 & SPI_CMD_MODE_MASK);
   trx_ctrl_1 |= TX_AUTO_CRC_ON;
   reg_write(TRX_CTRL_1, trx_ctrl_1);
-  
+
   Serial.println("Clearing interrupts...");
   reg_read(IRQ_STATUS);
 
@@ -261,6 +265,10 @@ void I32CTT_Arduino802154Interface::init() {
 
 void I32CTT_Arduino802154Interface::update_state() {
   this->current_state = reg_read(TRX_STATUS) & TRX_STATE_MSK;
+}
+
+uint8_t I32CTT_Arduino802154Interface::get_link_health() {
+  return this->link_health;
 }
 
 uint8_t I32CTT_Arduino802154Interface::wait_for_state(AT86RF233_TRX_STATUS state) {
@@ -720,22 +728,28 @@ void I32CTT_Arduino802154Interface::update() {
       ) {
         if((millis()-this->last_try)>TX_POLL_TIMEOUT ) {
           Serial.println("Packet timed out");
+          this->link_health = 1;
         } else {
           trac_status = trx_status>>5;
           switch(trac_status) {
             case TRAC_SUCCESS:
+                this->link_health = 0;
                 Serial.println("Packet sent");
               break;
             case TRAC_SUCCESS_DATA_PENDING:
+                this->link_health = 2;
                 Serial.println("Data pending");
               break;
             case TRAC_CHANNEL_ACCESS_FAILURE:
                 Serial.println("Access Failure");
+                this->link_health = 3;
               break;
             case TRAC_NO_ACK:
                 Serial.println("No ACK");
+                this->link_health = 4;
               break;
             case TRAC_INVALID:
+                this->link_health = 5;
                 Serial.println("Invalid");
               break;
           };
