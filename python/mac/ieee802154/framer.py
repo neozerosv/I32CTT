@@ -46,21 +46,42 @@ class framer_ieee802154:
   __src_addr_mode_long_addr  = 0b11 << 6
   __src_addr_mode_mask       = 0b11 << 6
 
-  def __init__(self):
+  def __init__(self, len_mtu_phy):
+    #La longitud de la maxima unidad de transferencia (payload de paquete mas grande soportado) es
+    #igual a la maxima longitud que soporta la capa inferior (phy) menos:
+    # - El campo de FCF: 2 bytes
+    # - El numero de secuencia: 1 byte
+    # - El ID de la PAN de destino: 2 bytes
+    # - La direccion corta de destino: 2 bytes
+    # - La direccion corta de origen: 2 bytes
+    # - El campo de FCS (checksum): 2 bytes
+    self.__len_mtu = len_mtu_phy - 2 - 1 - 2 - 2 - 2 - 2
+
+    #Se inicializa el numero de secuencia al azar
     self.__secuencia = randrange(0, 256)
 
+  def leer_len_mtu(self):
+    #Retorna la longitud de la maxima unidad de transferencia
+    return self.__len_mtu
+
   def escr_pan_id(self, pan_id):
+    #Almacena el ID de la PAN
     self.__pan_id = pan_id
 
   def escr_dir_corta(self, dir_corta):
+    #Almacena la direccion corta de este nodo de red
     self.__dir_corta = dir_corta
 
   def crear_mpdu(self, destino, payload):
+    #Se verifica que el payload sea de una longitud adecuada
+    if len(payload) > self.__len_mtu:
+      raise ValueError('El paquete solicitado es demasiado largo')
+
     #Arranca el paquete como una lista vacia
     paquete = []
 
     #Anexa el FCF
-    paquete.append(self.__frame_type_data | self.__ack_request | self.__pan_id_compression);
+    paquete.append(self.__frame_type_data | self.__ack_request | self.__pan_id_compression)
     paquete.append(self.__dst_addr_mode_short_addr | self.__frame_version_2006_2011 |\
                    self.__src_addr_mode_short_addr)
 
@@ -91,20 +112,25 @@ class framer_ieee802154:
 
   def extraer_payload(self, paquete):
     #Se filtran paquetes de datos que tengan la seguridad apagada y la compresion de pan encendida
-    filtro = self.__frame_type_mask | self.__security_enabled_mask | self.__pan_id_compression_mask 
-    patron = self.__frame_type_data | self.__pan_id_compression 
+    filtro = self.__frame_type_mask | self.__security_enabled_mask | self.__pan_id_compression_mask
+    patron = self.__frame_type_data | self.__pan_id_compression
 
     if paquete[0] & filtro != patron:
-      return ()
+      return None, []
 
     #Se filtran solo paquetes con direcciones cortas
     filtro = self.__dst_addr_mode_mask | self.__src_addr_mode_mask
     patron = self.__dst_addr_mode_short_addr | self.__src_addr_mode_short_addr
     if paquete[1] & filtro != patron:
-      return ()
+      return None, []
+
+    #Se toma la direccion de destino y se filtra comparandola con la de este nodo
+    destino = paquete[5] | (paquete[6] << 8)
+    if destino != self.__dir_corta:
+      return None, []
 
     #Se extrae la direccion de origen del paquete y su payload
-    dir_corta = paquete[7] | (paquete[8] << 8)
+    origen = paquete[7] | (paquete[8] << 8)
     payload = paquete[9:len(paquete) - 2]
 
-    return dir_corta, payload
+    return origen, payload
