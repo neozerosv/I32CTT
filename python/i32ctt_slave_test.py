@@ -36,7 +36,8 @@ print("Listo para comenzar")
 
 #En caso de usar un radio con PA/LNA, cuya direccion de comunicacion es controlada por el AT86RF233
 #y cuyo control de pass through se controla por GPIO, se puede usar esta linea:
-#phy = driver_at86rf233(gpio, FEM_TXRX = True, pin_FEM_CPS = 15)
+#phy = driver_at86rf233(gpio, pin_IRQ = 15, pin_RST = 12, pin_SLP_TR  = 11, FEM_TXRX = True,\
+#                       pin_FEM_CPS = 13)
 
 #Para radios de OpenLabs (Raspberry Pi 802.15.4 radio) se usa esta linea:
 phy = driver_at86rf233(gpio)
@@ -54,8 +55,8 @@ print("I32CTT initialized")
 mac.escr_config_red(canal=26, pan_id=0xCAFE, dir_corta=0x0201)
 
 #Crea una instancia del esclavo y lo agrega a I32CTT
-esclavo_ep0 = esclavo_prueba()
-i32ctt.agregar_esclavo(esclavo_ep0, 0)
+esclavo_ep1 = esclavo_prueba()
+i32ctt.agregar_esclavo(esclavo_ep1, 1)
 
 #Manejador de excepciones para SIGINT
 def signal_handler(signal, frame):

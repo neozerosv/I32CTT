@@ -80,10 +80,22 @@ class driver_at86rf233:
   __PHY_CC_CCA.CCA_REQUEST.mask = 0x80
 
   #Registro TRX_CTRL_1
-  __TRX_CTRL_1                  = clase_vacia()
-  __TRX_CTRL_1.addr             = 0x04
-  __TRX_CTRL_1.PA_EXT_EN        = clase_vacia()
-  __TRX_CTRL_1.PA_EXT_EN.mask   = 0x80
+  __TRX_CTRL_1                     = clase_vacia()
+  __TRX_CTRL_1.addr                = 0x04
+  __TRX_CTRL_1.PA_EXT_EN           = clase_vacia()
+  __TRX_CTRL_1.PA_EXT_EN.mask      = 0x80
+  __TRX_CTRL_1.IRQ_2_EXT_EN        = clase_vacia()
+  __TRX_CTRL_1.IRQ_2_EXT_EN.mask   = 0x40
+  __TRX_CTRL_1.TX_AUTO_CRC_ON      = clase_vacia()
+  __TRX_CTRL_1.TX_AUTO_CRC_ON.mask = 0x20
+  __TRX_CTRL_1.RX_BL_CTRL          = clase_vacia()
+  __TRX_CTRL_1.RX_BL_CTRL.mask     = 0x10
+  __TRX_CTRL_1.SPI_CMD_MODE        = clase_vacia()
+  __TRX_CTRL_1.SPI_CMD_MODE.mask   = 0x0C
+  __TRX_CTRL_1.IRQ_MASK_MODE       = clase_vacia()
+  __TRX_CTRL_1.IRQ_MASK_MODE.mask  = 0x02
+  __TRX_CTRL_1.IRQ_POLARITY        = clase_vacia()
+  __TRX_CTRL_1.IRQ_POLARITY.mask   = 0x01
 
   #Registro TRX_CTRL_2
   __TRX_CTRL_2                      = clase_vacia()
@@ -195,7 +207,7 @@ class driver_at86rf233:
 
     #Habilita el control automatico del PA/LNA externo
     if FEM_TXRX:
-      self.__escr_reg(self.__TRX_CTRL_1.addr, self.__TRX_CTRL_1.PA_EXT_EN.mask)
+      self.__escr_campo_control_fem(True)
 
     #Una vez inicializado, se coloca el radio en modo de recepcion
     self.__cambiar_estado(self.ESTADO_RX_AACK)
@@ -314,6 +326,21 @@ class driver_at86rf233:
 
     #Se escribe el nuevo valor del registro
     self.__escr_reg(self.__TRX_CTRL_2.addr, reg)
+
+  def __escr_campo_control_fem(self, valor):
+    #Toma el valor del registro y preserva los campos no relacionados, excepto el que se sobre
+    #escribira, que tomara el valor de 0
+    reg = self.__leer_reg(self.__TRX_CTRL_1.addr) &\
+          (self.__TRX_CTRL_1.IRQ_2_EXT_EN.mask | self.__TRX_CTRL_1.TX_AUTO_CRC_ON.mask |\
+           self.__TRX_CTRL_1.RX_BL_CTRL.mask | self.__TRX_CTRL_1.SPI_CMD_MODE.mask |\
+           self.__TRX_CTRL_1.IRQ_MASK_MODE.mask | self.__TRX_CTRL_1.IRQ_POLARITY.mask)
+
+    #Si el valor pasado es verdadero, sobrepone el bit del campo de modo seguro
+    if valor:
+      reg |= self.__TRX_CTRL_1.PA_EXT_EN.mask
+
+    #Se escribe el nuevo valor del registro
+    self.__escr_reg(self.__TRX_CTRL_1.addr, reg)
 
   def __leer_buffer(self):
     #Lee la longitud del payload del frame buffer usando un acceso desde RAM
