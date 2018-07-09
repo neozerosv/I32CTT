@@ -335,7 +335,7 @@ class driver_at86rf233:
            self.__TRX_CTRL_1.RX_BL_CTRL.mask | self.__TRX_CTRL_1.SPI_CMD_MODE.mask |\
            self.__TRX_CTRL_1.IRQ_MASK_MODE.mask | self.__TRX_CTRL_1.IRQ_POLARITY.mask)
 
-    #Si el valor pasado es verdadero, sobrepone el bit del campo de modo seguro
+    #Si el valor pasado es verdadero, sobrepone el bit del campo de control de amplificador externo
     if valor:
       reg |= self.__TRX_CTRL_1.PA_EXT_EN.mask
 
