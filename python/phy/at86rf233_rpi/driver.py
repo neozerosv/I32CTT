@@ -10,11 +10,8 @@ class driver_at86rf233:
   class clase_vacia:
     pass
 
-  #Pines del radio (segun numeracion de tablero)
+  #Contenedor para los pines del radio
   __pin = clase_vacia()
-  __pin.IRQ    = 16
-  __pin.RST    = 18
-  __pin.SLP_TR = 22
 
   #Comandos de bus SPI para el radio
   __cmd_spi = clase_vacia()
@@ -82,6 +79,12 @@ class driver_at86rf233:
   __PHY_CC_CCA.CCA_REQUEST      = clase_vacia()
   __PHY_CC_CCA.CCA_REQUEST.mask = 0x80
 
+  #Registro TRX_CTRL_1
+  __TRX_CTRL_1                  = clase_vacia()
+  __TRX_CTRL_1.addr             = 0x04
+  __TRX_CTRL_1.PA_EXT_EN        = clase_vacia()
+  __TRX_CTRL_1.PA_EXT_EN.mask   = 0x80
+
   #Registro TRX_CTRL_2
   __TRX_CTRL_2                      = clase_vacia()
   __TRX_CTRL_2.addr                 = 0x0C
@@ -144,7 +147,24 @@ class driver_at86rf233:
   __PAN_ID_1      = clase_vacia()
   __PAN_ID_1.addr = 0x23
 
-  def __init__(self, gpio):
+  #Funcion de inicializacion
+  #Argumentos:
+  # - gpio: Instancia de RPi.GPIO
+  # - pin_IRQ, pin_RST y pin_SLP_TR (requeridos): Numeros de pin del radio (numeracion de tablero)
+  # - FEM_TXRX: Indica si el AT86RF233 controla el sentido de comunicacion del frontend de radio.
+  #   - True: El AT86RF233 controla con los pines DIG3 y/o DIG4 el sentido de comunicacion.
+  #   - False: No se usa la opcion.
+  # - pin_FEM_CPS: Pin CPS del frontend de radio, que controla el modo bypass
+  #   - None: No se usa la opcion (Aplica si no hay frontend de radio)
+  #   - Numero: Usar GPIO (indica numero de pin). El pin se mantiene siempre activo en alto
+  def __init__(self, gpio, pin_IRQ = 16, pin_RST = 18, pin_SLP_TR  = 22, FEM_TXRX = False,\
+               pin_FEM_CPS = None):
+    #Almacena los parametros de pines
+    self.__pin.IRQ = pin_IRQ
+    self.__pin.RST = pin_RST
+    self.__pin.SLP_TR = pin_SLP_TR
+    self.__pin.FEM_CPS = pin_FEM_CPS
+
     #Crea el objeto del bus SPI0, linea CS0 y lo inicializa a 1MHz
     self.__spi = spidev.SpiDev()
     self.__spi.open(0,0)
@@ -153,15 +173,17 @@ class driver_at86rf233:
     #Configura los pines de I/O usados para el radio
     self.__gpio = gpio
     self.__gpio.setmode(self.__gpio.BOARD)
-    self.__gpio.setup(self.__pin.IRQ, self.__gpio.IN)#, pull_up_down=self.__gpio.PUD_UP);
+    self.__gpio.setup(self.__pin.IRQ, self.__gpio.IN)#, pull_up_down=self.__gpio.PUD_UP)
     self.__gpio.setup(self.__pin.RST, self.__gpio.OUT)
-    self.__gpio.setup(self.__pin.SLP_TR, self.__gpio.OUT);
+    self.__gpio.setup(self.__pin.SLP_TR, self.__gpio.OUT)
+    if self.__pin.FEM_CPS is not None:
+      self.__gpio.setup(self.__pin.FEM_CPS, self.__gpio.OUT)
 
     #Llama a la rutina de inicializacion del radio
     self.__reset()
 
     #Habilita la proteccion dinamica del frame buffer, para evitar que los paquetes recibidos sean
-    #sobre escritos hasta que sean leidos.
+    #sobre escritos hasta que sean leidos
     self.__escr_campo_modo_seguro_rx(True)
 
     #Lee el registro de estado de interrupciones para asegurarse de limpiar el estado de las mismas
@@ -171,14 +193,16 @@ class driver_at86rf233:
     #Habilita la interrupcion del radio de paquetes completados
     self.__escr_reg(self.__IRQ_MASK.addr, self.__IRQ_MASK.IRQ_3_TRX_END.mask)
 
-    #Una vez inicializado, se coloca el radio en modo de recepcion.
-    self.__cambiar_estado(self.ESTADO_RX_AACK);
+    #Habilita el control automatico del PA/LNA externo
+    if FEM_TXRX:
+      self.__escr_reg(self.__TRX_CTRL_1.addr, self.__TRX_CTRL_1.PA_EXT_EN.mask)
 
-    #Establece el callback de IRQ:
-    #gpio.add_event_detect(self.__pin_IRQ, gpio.FALLING, callback=self.__irq_callback)
+    #Una vez inicializado, se coloca el radio en modo de recepcion
+    self.__cambiar_estado(self.ESTADO_RX_AACK)
 
-  #def __irq_callback():
-    #return
+  def leer_len_mtu(self):
+    #Retorna la longitud de la maxima unidad de transferencia (paquete mas grande soportado)
+    return 127
 
   def escr_canal(self, canal):
     self.__escr_campo_canal(canal)
@@ -191,16 +215,11 @@ class driver_at86rf233:
     self.__escr_reg(self.__SHORT_ADDR_0.addr, dir_corta & 0xFF)
     self.__escr_reg(self.__SHORT_ADDR_1.addr, (dir_corta >> 8) & 0xFF)
 
-  def prueba(self):
-    #print("bits_per_word = " + str(spi.bits_per_word))
-    #print("cshigh = " + str(spi.cshigh))
-    #print("lsbfirst = " + str(spi.lsbfirst))
-    #print("max_speed_hz = " + str(spi.max_speed_hz))
-    #print("mode = " + str(spi.mode))
-    #print(self.__leer_buffer())
-    pass
-
   def enviar_paquete(self, paquete):
+    #Se verifica que el paquete sea de una longitud adecuada
+    if len(paquete) > self.leer_len_mtu():
+      raise ValueError("El paquete solicitado es demasiado largo")
+
     #Coloca el radio en modo de transmision
     self.__cambiar_estado(self.ESTADO_TX_ARET)
 
@@ -208,8 +227,8 @@ class driver_at86rf233:
     self.__escr_buffer(paquete)
 
     #Activa la linea SLP_TR para iniciar la transmision del paquete
-    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.HIGH);
-    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.LOW);
+    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.HIGH)
+    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.LOW)
 
     #Espera a que el radio active la linea de interrupcion por el paquete recien enviado
     t_ini = time.time()
@@ -259,13 +278,17 @@ class driver_at86rf233:
 
   def __reset(self):
     #Coloca SLP_TR en nivel bajo (inactivo)
-    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.LOW);
+    self.__gpio.output(self.__pin.SLP_TR, self.__gpio.LOW)
+
+    #Saca al frontend de radio de modo bypass
+    if self.__pin.FEM_CPS is not None:
+      self.__gpio.output(self.__pin.FEM_CPS, self.__gpio.HIGH)
 
     #Inicializa el radio para colocarlo en un estado conocido
     self.__gpio.output(self.__pin.RST, self.__gpio.LOW)
-    time.sleep(0.1);
+    time.sleep(0.1)
     self.__gpio.output(self.__pin.RST, self.__gpio.HIGH)
-    time.sleep(0.1);
+    time.sleep(0.1)
 
   def __escr_reg(self, reg, dato):
     self.__spi.xfer2([self.__cmd_spi.REG_WRITE | reg, dato])
@@ -293,11 +316,11 @@ class driver_at86rf233:
     self.__escr_reg(self.__TRX_CTRL_2.addr, reg)
 
   def __leer_buffer(self):
-    #Lee la longitud del payload del frame buffer usando un acceso desde RAM.
+    #Lee la longitud del payload del frame buffer usando un acceso desde RAM
     longitud = self.__spi.xfer2([self.__cmd_spi.SRAM_READ, 0x00, 0x00])[2]
 
     #Lee el payload usando un acceso al frame buffer (se retiran los 2 primeros bytes de estado de
-    #PHY y el PHR).
+    #PHY y el PHR)
     return self.__spi.xfer2([self.__cmd_spi.FB_READ] + ([0x00] * (1 + longitud)))[2:]
 
     #Nota: Las raspberry pi no pueden sostener chip select entre transacciones SPI, por lo que no
